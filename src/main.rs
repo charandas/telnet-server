@@ -33,7 +33,13 @@ fn main() {
         thread::spawn(move || {
             for received in rx {
                 println!("Got: {:?} from sender: {}", received.message, received.sender_id);
-                let client = server.lock().unwrap().connected_clients.get(&received.sender_id).unwrap();
+
+                for (id, client) in server.lock().unwrap().connected_clients.iter_mut() {
+                    if *id != received.sender_id {
+                        client.stream.write(&received.message).unwrap();
+                        client.stream.flush().unwrap();
+                    }
+                }
 
             }
         });
@@ -43,7 +49,6 @@ fn main() {
         let stream = stream.unwrap();
 
         println!("Registering new client...");
-        // let server = Arc::clone(&server);
         server.lock().unwrap().register_client(stream, tx.clone())
     }
 }
@@ -56,7 +61,7 @@ pub struct TelnetServer {
 #[derive(Debug)]
 pub struct TelnetClient {
     join_handle: Option<JoinHandle<()>>,
-    // stream: TcpStream
+    stream: TcpStream
 }
 
 pub struct MessageWrapper {
@@ -83,14 +88,17 @@ impl TelnetServer {
         let sender_id = self.connected_id_counter;
         client.set_nonblocking(true).unwrap();
 
+        let cloned_client = client.try_clone().unwrap();
+
         let join_handle = thread::spawn(move || {
-            Self::handle_connection(client, sender_id, sender);
+            Self::handle_connection(cloned_client, sender_id, sender);
         });
         println!("{:?}", self);
         self.connected_clients.insert(
             sender_id,
             TelnetClient {
-                join_handle: Some(join_handle)
+                join_handle: None,
+                stream: client
             }
         );
         self.connected_id_counter += 1;
