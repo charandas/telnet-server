@@ -1,15 +1,11 @@
 use std::io::{
     prelude::Read,
-    // prelude::Write,
     ErrorKind
 };
 use std::collections::HashMap;
 use std::net::TcpStream;
 
-use std::thread::{
-    self,
-    // JoinHandle
-};
+use std::thread;
 
 use std::sync::{
     Arc,
@@ -42,14 +38,14 @@ impl TelnetServer {
             }))
         }
     }
-    pub fn register_client(&mut self, client: TcpStream, sender: Sender<MessageWrapper>) {
+    pub fn register_client(&mut self, client: TcpStream, sender: Sender<MessageWrapper>) -> u32 {
         let sender_id = self.inner.lock().unwrap().connected_id_counter;
         client.set_nonblocking(true).unwrap();
 
         let cloned_client = client.try_clone().unwrap();
         let cloned_server = self.inner.clone();
 
-        let join_handle = thread::spawn(move || {
+        thread::spawn(move || {
             Self::handle_connection(cloned_client, sender_id, sender);
             cloned_server.lock().unwrap().connected_clients.remove(&sender_id);
         });
@@ -57,11 +53,12 @@ impl TelnetServer {
         self.inner.lock().unwrap().connected_clients.insert(
             sender_id,
             TelnetClient {
-                join_handle: None,
                 stream: client
             }
         );
         self.inner.lock().unwrap().connected_id_counter += 1;
+
+        sender_id
     }
 
     fn handle_connection(mut stream: TcpStream, sender_id: u32, sender: Sender<MessageWrapper>) {
@@ -92,7 +89,7 @@ impl TelnetServer {
                         // retry
                     },
                     other_error => {
-                        panic!("Problem opening the file: {:?}", other_error)
+                        panic!("Unexpected error reading client stream: {:?}", other_error)
                     }
                 }
             };
