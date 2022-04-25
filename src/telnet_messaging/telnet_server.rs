@@ -1,5 +1,7 @@
 use std::io::{
-    prelude::Read,
+    // prelude::Read,
+    BufRead,
+    BufReader,
     ErrorKind
 };
 use std::collections::HashMap;
@@ -40,7 +42,6 @@ impl TelnetServer {
     }
     pub fn register_client(&mut self, client: TcpStream, sender: Sender<MessageWrapper>) -> u32 {
         let sender_id = self.inner.lock().unwrap().connected_id_counter;
-        client.set_nonblocking(true).unwrap();
 
         let cloned_client = client.try_clone().unwrap();
         let cloned_server = self.inner.clone();
@@ -61,33 +62,23 @@ impl TelnetServer {
         sender_id
     }
 
-    fn handle_connection(mut stream: TcpStream, sender_id: u32, sender: Sender<MessageWrapper>) {
-        let mut buffer = [0; 1024];
-        stream.set_read_timeout(Some(Duration::from_millis(1000))).unwrap();
-        loop {
-            match stream.read(&mut buffer) {
-                Ok(num_bytes) => {
-                    if num_bytes > 0 {
-                        println!("{:?}", buffer.get(0..num_bytes));
-                        match buffer.get(0..num_bytes) {
-                            Some(returned) => sender.send(MessageWrapper {
-                                sender_id,
-                                message: returned.to_vec(),
-                            }).unwrap(),
-                            None => {}
-                        };
+    fn handle_connection(stream: TcpStream, sender_id: u32, sender: Sender<MessageWrapper>) {
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
 
-                    } else if num_bytes == 0 {
-                        // Stream is closed
-                        drop(sender);
-                        println!("Client left. Closing connection...");
-                        break;
+        // stream.set_read_timeout(Some(Duration::from_millis(1000))).unwrap();
+        loop {
+            match reader.fill_buf() {
+                Ok(buffer) => {
+                    let num_bytes = buffer.len();
+                    if num_bytes > 0 {
+                        sender.send(MessageWrapper {
+                            sender_id,
+                            message:  buffer.get(0..num_bytes).unwrap().to_vec()
+                        }).unwrap();
+                        reader.consume(num_bytes);
                     }
                 }
                 Err(error) => match error.kind() {
-                    ErrorKind::WouldBlock => {
-                        // retry
-                    },
                     other_error => {
                         panic!("Unexpected error reading client stream: {:?}", other_error)
                     }
