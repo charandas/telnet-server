@@ -3,6 +3,8 @@ pub mod telnet_messaging {
     pub mod telnet_client;
 }
 
+pub mod tests;
+
 use std::sync::{
     mpsc::{
         self,

@@ -23,6 +23,7 @@ pub struct MessageWrapper {
     pub message: Vec<u8>,
 }
 
+
 #[derive(Debug)]
 pub struct TelnetServerInner {
     pub connected_clients:  HashMap<u32, TelnetClient>,
@@ -39,7 +40,9 @@ impl TelnetServer {
         }
     }
     pub fn register_client(&mut self, client: TcpStream, sender: Sender<MessageWrapper>) -> u32 {
-        let sender_id = self.inner.lock().unwrap().connected_id_counter;
+        let mut inner = self.inner.lock().unwrap();
+
+        let sender_id = inner.connected_id_counter;
 
         let cloned_client = client.try_clone().unwrap();
         let cloned_server = self.inner.clone();
@@ -49,13 +52,14 @@ impl TelnetServer {
             cloned_server.lock().unwrap().connected_clients.remove(&sender_id);
         });
         println!("{:?}", self.inner);
-        self.inner.lock().unwrap().connected_clients.insert(
+
+        inner.connected_clients.insert(
             sender_id,
             TelnetClient {
                 stream: client
             }
         );
-        self.inner.lock().unwrap().connected_id_counter += 1;
+        inner.connected_id_counter += 1;
 
         sender_id
     }
@@ -103,5 +107,5 @@ impl TelnetServer {
 }
 
 pub struct TelnetServer {
-    pub inner: Arc<Mutex<TelnetServerInner>>
+    inner: Arc<Mutex<TelnetServerInner>>
 }
