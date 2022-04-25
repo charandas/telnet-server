@@ -37,6 +37,7 @@ fn main() {
 
             for (id, client) in cloned_server.lock().unwrap().connected_clients.iter_mut() {
                 if *id != received.sender_id {
+                    client.stream.write(format!("{}: ", received.sender_id).as_bytes()).unwrap();
                     client.stream.write(&received.message).unwrap();
                     client.stream.flush().unwrap();
                 }

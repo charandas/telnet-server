@@ -1,8 +1,7 @@
 use std::io::{
     // prelude::Read,
     BufRead,
-    BufReader,
-    ErrorKind
+    BufReader
 };
 use std::collections::HashMap;
 use std::net::TcpStream;
@@ -14,7 +13,6 @@ use std::sync::{
     Mutex,
 };
 
-use std::time::Duration;
 use std::sync::mpsc::Sender;
 
 use crate::telnet_messaging::telnet_client::TelnetClient;
@@ -63,36 +61,27 @@ impl TelnetServer {
     }
 
     fn handle_connection(stream: TcpStream, sender_id: u32, sender: Sender<MessageWrapper>) {
-        let mut reader = BufReader::new(stream.try_clone().unwrap());
+        let mut reader = BufReader::new(stream);
 
-        // stream.set_read_timeout(Some(Duration::from_millis(1000))).unwrap();
         loop {
-            match reader.fill_buf() {
-                Ok(buffer) => {
-                    let num_bytes = buffer.len();
-                    if num_bytes > 0 {
-                        sender.send(MessageWrapper {
-                            sender_id,
-                            message:  buffer.get(0..num_bytes).unwrap().to_vec()
-                        }).unwrap();
-                        reader.consume(num_bytes);
-                    } else {
-                        // Stream is closed
-                        drop(sender);
-                        println!("Client left. Closing connection...");
-                        break;
-                    }
-                }
-                Err(error) => match error.kind() {
-                    other_error => {
-                        panic!("Unexpected error reading client stream: {:?}", other_error)
-                    }
-                }
-            };
+            let buffer = reader.fill_buf().unwrap();
+            let num_bytes = buffer.len();
+            if num_bytes > 0 {
+                sender.send(MessageWrapper {
+                    sender_id,
+                    message:  buffer.get(0..num_bytes).unwrap().to_vec()
+                }).unwrap();
+                // using buffer.consume still returns the same data again. Do it on the reader itself.
+                reader.consume(num_bytes);
+            } else {
+                // Stream is closed
+                drop(sender);
+                println!("Client left. Closing connection...");
+                break;
+            }
         }
     }
 }
-
 
 pub struct TelnetServer {
     pub inner: Arc<Mutex<TelnetServerInner>>
