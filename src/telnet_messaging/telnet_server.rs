@@ -1,8 +1,6 @@
 use std::io::{
-    Read,
     Write,
-    BufRead,
-    BufReader
+    BufRead
 };
 use std::collections::HashMap;
 use std::thread;
@@ -25,17 +23,30 @@ pub struct MessageWrapper {
 
 
 #[derive(Debug)]
-pub struct TelnetServerInner<'a, T>
-where T :  Read + Write + BufRead + Clone + Send
+pub struct TelnetServerInner<'a, W, T>
+where
+    T : BufRead + Sync + Send,
+    W  : Write + Sync + Send
 {
-    pub connected_clients:  HashMap<u32, TelnetClient<'a, T>>,
+    pub connected_clients:  HashMap<u32, &'a TelnetClient<'a, W, T>>,
     pub connected_id_counter: u32
 }
 
-impl<'a, T> TelnetServer<'a, T>
-where T :  Read + Write + BufRead + Clone + Send
+pub struct TelnetServer<'a, W, T>
+where
+    T : BufRead + Sync + Send,
+    W  : Write + Sync + Send
 {
-    pub fn new() -> TelnetServer<'a, T> {
+    inner: Arc<Mutex<TelnetServerInner<'a, W, T>>>
+}
+
+
+impl<'a, W, T> TelnetServer<'a, W, T>
+where
+    T : BufRead + Sync + Send,
+    W  : Write + Sync + Send
+{
+    pub fn new() -> TelnetServer<'a, W, T> {
         TelnetServer {
             inner: Arc::new(Mutex::new(TelnetServerInner {
                 connected_clients: HashMap::new(),
@@ -43,7 +54,7 @@ where T :  Read + Write + BufRead + Clone + Send
             }))
         }
     }
-    pub fn register_client(&mut self, client: &T, sender: Sender<MessageWrapper>) -> u32 {
+    pub fn register_client(&mut self, writer: W, reader: T, sender: Sender<MessageWrapper>) -> u32 {
         let mut inner = self.inner.lock().unwrap();
 
         let sender_id = inner.connected_id_counter;
@@ -52,15 +63,16 @@ where T :  Read + Write + BufRead + Clone + Send
         let cloned_server = self.inner.clone();
 
         thread::spawn(move || {
-            Self::handle_connection(client, sender_id, sender);
+            Self::handle_connection(&mut reader, sender_id, sender);
             cloned_server.lock().unwrap().connected_clients.remove(&sender_id);
         });
        //  println!("{:?}", self.inner);
 
         inner.connected_clients.insert(
             sender_id,
-            TelnetClient {
-                stream: client
+            &TelnetClient {
+                reader: &mut reader,
+                writer: &mut writer
             }
         );
         inner.connected_id_counter += 1;
@@ -77,9 +89,9 @@ where T :  Read + Write + BufRead + Clone + Send
 
                 for (id, client) in cloned_server.lock().unwrap().connected_clients.iter_mut() {
                     if *id != received.sender_id {
-                        client.stream.write(format!("{}: ", received.sender_id).as_bytes()).unwrap();
-                        client.stream.write(&received.message).unwrap();
-                        client.stream.flush().unwrap();
+                        client.writer.write(format!("{}: ", received.sender_id).as_bytes()).unwrap();
+                        client.writer.write(&received.message).unwrap();
+                        client.writer.flush().unwrap();
                     }
                 }
 
@@ -87,9 +99,8 @@ where T :  Read + Write + BufRead + Clone + Send
         });
     }
 
-    fn handle_connection(stream: &T, sender_id: u32, sender: Sender<MessageWrapper>) {
-        let mut reader = BufReader::new(stream);
-
+    fn handle_connection(reader: &'a mut T, sender_id: u32, sender: Sender<MessageWrapper>)
+    {
         loop {
             let buffer = reader.fill_buf().unwrap();
             let num_bytes = buffer.len();
@@ -108,10 +119,4 @@ where T :  Read + Write + BufRead + Clone + Send
             }
         }
     }
-}
-
-pub struct TelnetServer<'a, T>
-where T :  Read + Write + BufRead + Clone + Send
-{
-    inner: Arc<Mutex<TelnetServerInner<'a, T>>>
 }

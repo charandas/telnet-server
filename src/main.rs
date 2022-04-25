@@ -12,6 +12,8 @@ use std::sync::{
         Receiver
     }
 };
+
+use std::io::BufReader;
 use std::net::TcpListener;
 use crate::telnet_messaging::telnet_server::{
     MessageWrapper,
@@ -31,7 +33,9 @@ fn main() {
     for stream in listener.incoming() {
         let stream = stream.unwrap();
 
+        let mut reader = BufReader::new(stream);
+
         println!("Registering new client...");
-        server.register_client(&mut stream, tx.clone());
+        server.register_client(stream, reader, tx.clone());
     }
 }

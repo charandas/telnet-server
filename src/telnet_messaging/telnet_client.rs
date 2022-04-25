@@ -1,14 +1,14 @@
 use std::io::{
     Write,
     BufRead,
-    Read
 };
 
-use std::clone::Clone;
-
 #[derive(Debug)]
-pub struct TelnetClient<'a, T>
-where T :  Read + Write + BufRead + Clone + Send + 'a
+pub struct TelnetClient<'a, W, T>
+where
+    T : BufRead + Sync + Send,
+    W  : Write + Sync + Send
 {
-    pub stream: &'a T
+    pub reader: &'a mut T,
+    pub writer: &'a mut W
 }
