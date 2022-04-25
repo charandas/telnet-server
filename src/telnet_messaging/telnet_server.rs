@@ -11,6 +11,11 @@ use std::thread::{
     // JoinHandle
 };
 
+use std::sync::{
+    Arc,
+    Mutex,
+};
+
 use std::time::Duration;
 use std::sync::mpsc::Sender;
 
@@ -23,36 +28,40 @@ pub struct MessageWrapper {
 }
 
 #[derive(Debug)]
-pub struct TelnetServer {
+pub struct TelnetServerInner {
     pub connected_clients:  HashMap<u32, TelnetClient>,
-    connected_id_counter: u32
+    pub connected_id_counter: u32
 }
 
 impl TelnetServer {
     pub fn new() -> TelnetServer {
         TelnetServer {
-            connected_clients: HashMap::new(),
-            connected_id_counter: 1
+            inner: Arc::new(Mutex::new(TelnetServerInner {
+                connected_clients: HashMap::new(),
+                connected_id_counter: 1
+            }))
         }
     }
     pub fn register_client(&mut self, client: TcpStream, sender: Sender<MessageWrapper>) {
-        let sender_id = self.connected_id_counter;
+        let sender_id = self.inner.lock().unwrap().connected_id_counter;
         client.set_nonblocking(true).unwrap();
 
         let cloned_client = client.try_clone().unwrap();
+        let cloned_server = self.inner.clone();
 
         let join_handle = thread::spawn(move || {
             Self::handle_connection(cloned_client, sender_id, sender);
+            cloned_server.lock().unwrap().connected_clients.remove(&sender_id);
         });
-        println!("{:?}", self);
-        self.connected_clients.insert(
+        println!("{:?}", self.inner);
+        self.inner.lock().unwrap().connected_clients.insert(
             sender_id,
             TelnetClient {
                 join_handle: None,
                 stream: client
             }
         );
-        self.connected_id_counter += 1;
+        self.inner.lock().unwrap().connected_id_counter += 1;
     }
 
     fn handle_connection(mut stream: TcpStream, sender_id: u32, sender: Sender<MessageWrapper>) {
@@ -89,4 +98,9 @@ impl TelnetServer {
             };
         }
     }
+}
+
+
+pub struct TelnetServer {
+    pub inner: Arc<Mutex<TelnetServerInner>>
 }

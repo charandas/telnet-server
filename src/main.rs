@@ -9,7 +9,6 @@ use std::io::{
 
 use std::sync::{
     Arc,
-    Mutex,
     mpsc::{
         self,
         Sender,
@@ -26,18 +25,19 @@ use crate::telnet_messaging::telnet_server::{
 
 fn main() {
     let listener = TcpListener::bind("127.0.0.1:7878").unwrap();
-    let server = Arc::new(Mutex::new(TelnetServer::new()));
+    let mut server = TelnetServer::new();
 
     let (tx, rx): (Sender<MessageWrapper>, Receiver<MessageWrapper>) = mpsc::channel();
 
     // TODO: collect this join Handle
     {
-        let server = Arc::clone(&server);
+        let cloned_server = Arc::clone(&server.inner);
+
         thread::spawn(move || {
             for received in rx {
                 println!("Got: {:?} from sender: {}", received.message, received.sender_id);
 
-                for (id, client) in server.lock().unwrap().connected_clients.iter_mut() {
+                for (id, client) in cloned_server.lock().unwrap().connected_clients.iter_mut() {
                     if *id != received.sender_id {
                         client.stream.write(&received.message).unwrap();
                         client.stream.flush().unwrap();
@@ -52,6 +52,6 @@ fn main() {
         let stream = stream.unwrap();
 
         println!("Registering new client...");
-        server.lock().unwrap().register_client(stream, tx.clone())
+        server.register_client(stream, tx.clone())
     }
 }
