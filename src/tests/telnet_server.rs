@@ -1,7 +1,9 @@
-use crate::telnet_messaging::telnet_server::{
-    MessageWrapper,
-    TelnetServer
-};
+/* use crate::telnet_messaging::telnet_server::{
+    MessageWrapper
+}; */
+
+use mockall_double::double;
+use mockall::{automock, mock, predicate::*};
 
 #[test]
 fn it_can_construct_message_wrapper() {

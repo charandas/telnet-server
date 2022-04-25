@@ -32,6 +32,6 @@ fn main() {
         let stream = stream.unwrap();
 
         println!("Registering new client...");
-        server.register_client(stream, tx.clone());
+        server.register_client(&mut stream, tx.clone());
     }
 }

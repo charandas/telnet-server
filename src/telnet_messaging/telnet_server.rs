@@ -1,10 +1,10 @@
 use std::io::{
+    Read,
+    Write,
     BufRead,
     BufReader
 };
 use std::collections::HashMap;
-use std::io::prelude::Write;
-use std::net::TcpStream;
 use std::thread;
 
 use std::sync::{
@@ -25,13 +25,17 @@ pub struct MessageWrapper {
 
 
 #[derive(Debug)]
-pub struct TelnetServerInner {
-    pub connected_clients:  HashMap<u32, TelnetClient>,
+pub struct TelnetServerInner<'a, T>
+where T :  Read + Write + BufRead + Clone + Send
+{
+    pub connected_clients:  HashMap<u32, TelnetClient<'a, T>>,
     pub connected_id_counter: u32
 }
 
-impl TelnetServer {
-    pub fn new() -> TelnetServer {
+impl<'a, T> TelnetServer<'a, T>
+where T :  Read + Write + BufRead + Clone + Send
+{
+    pub fn new() -> TelnetServer<'a, T> {
         TelnetServer {
             inner: Arc::new(Mutex::new(TelnetServerInner {
                 connected_clients: HashMap::new(),
@@ -39,19 +43,19 @@ impl TelnetServer {
             }))
         }
     }
-    pub fn register_client(&mut self, client: TcpStream, sender: Sender<MessageWrapper>) -> u32 {
+    pub fn register_client(&mut self, client: &T, sender: Sender<MessageWrapper>) -> u32 {
         let mut inner = self.inner.lock().unwrap();
 
         let sender_id = inner.connected_id_counter;
 
-        let cloned_client = client.try_clone().unwrap();
+        // let cloned_client = client.try_clone().unwrap();
         let cloned_server = self.inner.clone();
 
         thread::spawn(move || {
-            Self::handle_connection(cloned_client, sender_id, sender);
+            Self::handle_connection(client, sender_id, sender);
             cloned_server.lock().unwrap().connected_clients.remove(&sender_id);
         });
-        println!("{:?}", self.inner);
+       //  println!("{:?}", self.inner);
 
         inner.connected_clients.insert(
             sender_id,
@@ -83,7 +87,7 @@ impl TelnetServer {
         });
     }
 
-    fn handle_connection(stream: TcpStream, sender_id: u32, sender: Sender<MessageWrapper>) {
+    fn handle_connection(stream: &T, sender_id: u32, sender: Sender<MessageWrapper>) {
         let mut reader = BufReader::new(stream);
 
         loop {
@@ -106,6 +110,8 @@ impl TelnetServer {
     }
 }
 
-pub struct TelnetServer {
-    inner: Arc<Mutex<TelnetServerInner>>
+pub struct TelnetServer<'a, T>
+where T :  Read + Write + BufRead + Clone + Send
+{
+    inner: Arc<Mutex<TelnetServerInner<'a, T>>>
 }
