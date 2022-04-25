@@ -76,6 +76,11 @@ impl TelnetServer {
                             message:  buffer.get(0..num_bytes).unwrap().to_vec()
                         }).unwrap();
                         reader.consume(num_bytes);
+                    } else {
+                        // Stream is closed
+                        drop(sender);
+                        println!("Client left. Closing connection...");
+                        break;
                     }
                 }
                 Err(error) => match error.kind() {
