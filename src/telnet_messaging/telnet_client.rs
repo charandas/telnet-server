@@ -4,11 +4,11 @@ use std::io::{
 };
 
 #[derive(Debug)]
-pub struct TelnetClient<'a, W, T>
+pub struct TelnetClient<W, T>
 where
-    T : BufRead + Sync + Send,
-    W  : Write + Sync + Send
+    T : BufRead + Sync + Send + 'static,
+    W  : Write + Sync + Send + 'static
 {
-    pub reader: &'a mut T,
-    pub writer: &'a mut W
+    pub reader: Option<T>,
+    pub writer: W
 }

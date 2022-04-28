@@ -23,30 +23,30 @@ pub struct MessageWrapper {
 
 
 #[derive(Debug)]
-pub struct TelnetServerInner<'a, W, T>
+pub struct TelnetServerInner<W, T>
 where
-    T : BufRead + Sync + Send,
-    W  : Write + Sync + Send
+    T : BufRead + Sync + Send + 'static + 'static,
+    W  : Write + Sync + Send + 'static + 'static
 {
-    pub connected_clients:  HashMap<u32, &'a TelnetClient<'a, W, T>>,
+    pub connected_clients:  HashMap<u32, TelnetClient<W, T>>,
     pub connected_id_counter: u32
 }
 
-pub struct TelnetServer<'a, W, T>
+pub struct TelnetServer<W, T>
 where
-    T : BufRead + Sync + Send,
-    W  : Write + Sync + Send
+    T : BufRead + Sync + Send + 'static,
+    W  : Write + Sync + Send + 'static
 {
-    inner: Arc<Mutex<TelnetServerInner<'a, W, T>>>
+    inner: Arc<Mutex<TelnetServerInner<W, T>>>
 }
 
 
-impl<'a, W, T> TelnetServer<'a, W, T>
+impl<W, T> TelnetServer<W, T>
 where
-    T : BufRead + Sync + Send,
-    W  : Write + Sync + Send
+    T : BufRead + Sync + Send + 'static,
+    W  : Write + Sync + Send + 'static
 {
-    pub fn new() -> TelnetServer<'a, W, T> {
+    pub fn new() -> TelnetServer<W, T> {
         TelnetServer {
             inner: Arc::new(Mutex::new(TelnetServerInner {
                 connected_clients: HashMap::new(),
@@ -63,16 +63,16 @@ where
         let cloned_server = self.inner.clone();
 
         thread::spawn(move || {
-            Self::handle_connection(&mut reader, sender_id, sender);
+            Self::handle_connection(reader, sender_id, sender);
             cloned_server.lock().unwrap().connected_clients.remove(&sender_id);
         });
        //  println!("{:?}", self.inner);
 
         inner.connected_clients.insert(
             sender_id,
-            &TelnetClient {
-                reader: &mut reader,
-                writer: &mut writer
+            TelnetClient {
+                reader: None,
+                writer
             }
         );
         inner.connected_id_counter += 1;
@@ -99,7 +99,7 @@ where
         });
     }
 
-    fn handle_connection(reader: &'a mut T, sender_id: u32, sender: Sender<MessageWrapper>)
+    fn handle_connection(mut reader: T, sender_id: u32, sender: Sender<MessageWrapper>)
     {
         loop {
             let buffer = reader.fill_buf().unwrap();

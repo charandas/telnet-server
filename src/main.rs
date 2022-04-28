@@ -32,10 +32,11 @@ fn main() {
     // Register each client's stream with a unique tx that will pass the data back from their thread into the server receive handler
     for stream in listener.incoming() {
         let stream = stream.unwrap();
+        let cloned_stream = stream.try_clone().unwrap();
 
-        let mut reader = BufReader::new(stream);
+        let reader = BufReader::new(stream);
 
         println!("Registering new client...");
-        server.register_client(stream, reader, tx.clone());
+        server.register_client(cloned_stream, reader, tx.clone());
     }
 }
